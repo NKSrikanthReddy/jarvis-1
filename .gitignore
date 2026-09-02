@@ -1,0 +1,26 @@
+# Environment variables and API keys
+.env
+*.env
+
+# OAuth credentials and session tokens
+credentials.json
+token.json
+
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# IDE & OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

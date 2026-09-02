@@ -1,0 +1,19 @@
+# Core Google GenAI SDK (gemini-2.5-flash)
+google-genai>=2.0.0
+google-generativeai>=0.8.0
+
+# Gmail API & OAuth2
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.120.0
+google-auth-httplib2>=0.2.0
+
+# Environment & Settings
+python-dotenv>=1.0.1
+pydantic>=2.7.0
+
+# HTML parsing & Terminal UI
+beautifulsoup4>=4.12.3
+rich>=13.7.1
+
+# Optional Voice & Testing
+pytest>=8.1.0
