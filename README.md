@@ -1,6 +1,8 @@
 # 🤖 J.A.R.V.I.S. — Personal AI Email Intelligence Assistant
 
+
 > *"Just A Rather Very Intelligent System"* — A modular, local personal assistant in Python that fetches, analyzes, and delivers executive intelligence briefings for your unread emails using **Google GenAI SDK (Gemini 2.5 Flash)** and **Stark-grade terminal HUDs**.
+
 
 ---
 
