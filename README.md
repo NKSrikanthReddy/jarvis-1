@@ -134,7 +134,7 @@ All API/mail inputs happen **inside the TUI** — you never hand-edit `.env` by 
 
 1. **Identity** — how JARVIS addresses you (`JARVIS_USER_NAME`)
 2. **Gemini key** — hidden password prompt, placeholder rejected, optional live API test, model choice
-3. **Email backend** — `1` Gmail OAuth (default, no app password) / `2` IMAP App Password (optional, only if you pick it) / `3` mock-only
+3. **Email backend** — `1` Gmail OAuth (default, no app password — wizard builds `credentials.json` from pasted JSON or Client ID + Secret, then optionally logs you in to create `token.json`) / `2` IMAP App Password (optional, only if you pick it) / `3` mock-only
 4. **Defaults** — email limit, watch interval, voice on/off + rate
 
 Writes `.env` (chmod 600, git-ignored) and prints next steps.
@@ -165,13 +165,14 @@ Writes `.env` (chmod 600, git-ignored) and prints next steps.
 ```
 
 ### Option A: Gmail API with OAuth 2.0 (Recommended)
+> Easiest path: pick `1` in `python setup.py` — it builds `credentials.json` for you from pasted JSON or Client ID + Secret, and can log you in on the spot to create `token.json`. Manual steps below are only if you prefer doing it by hand.
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
 2. Create a new project (e.g. `JARVIS-Assistant`).
 3. Enable the **Gmail API** in **APIs & Services > Library**.
 4. Configure the **OAuth Consent Screen** (User Type: *External*, add your email as a *Test User*).
 5. Go to **APIs & Services > Credentials** > **Create Credentials** > **OAuth client ID**.
 6. Select **Desktop App** as the Application Type.
-7. Download the JSON file, rename it to `credentials.json`, and place it in the `jarvis/` root directory.
+7. Either paste the Client ID + Secret into the setup wizard, or download the JSON file, rename it to `credentials.json`, and place it in the `jarvis/` root directory.
 8. On the first run, JARVIS will open a browser window for a one-time Google login and save `token.json`.
 
 ---

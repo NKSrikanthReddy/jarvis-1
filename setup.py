@@ -160,6 +160,73 @@ def check_credentials_json(path_str: str) -> tuple[bool, str]:
     return False, "JSON lacks 'installed' or 'web' OAuth client section."
 
 
+def build_oauth_client_json(client_id: str, client_secret: str, project_id: str = "") -> dict:
+    """Build a Desktop-app credentials.json dict from raw OAuth details."""
+    return {
+        "installed": {
+            "client_id": client_id.strip(),
+            "project_id": project_id.strip(),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_secret": client_secret.strip(),
+            "redirect_uris": ["http://localhost"],
+        }
+    }
+
+
+def write_credentials_file(path_str: str, data: dict) -> Path:
+    """Write credentials.json (chmod 600) and return its path."""
+    p = (BASE_DIR / path_str) if not os.path.isabs(path_str) else Path(path_str)
+    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    try:
+        os.chmod(p, 0o600)
+    except Exception:
+        pass
+    return p
+
+
+def read_pasted_json() -> tuple[dict | None, str]:
+    """Read multi-line pasted JSON from stdin, terminated by END on its own line."""
+    console.print("[dim]Paste the JSON content below. When done, type [bold]END[/bold] on its own line and press Enter.[/dim]")
+    lines: list[str] = []
+    while True:
+        try:
+            line = input()
+        except (EOFError, KeyboardInterrupt):
+            raise KeyboardInterrupt
+        if line.strip() == "END":
+            break
+        lines.append(line)
+    raw = "\n".join(lines).strip()
+    if not raw:
+        return None, "Nothing was pasted."
+    try:
+        data = json.loads(raw)
+    except Exception as e:
+        return None, f"That is not valid JSON: {e}"
+    if not isinstance(data, dict) or ("installed" not in data and "web" not in data):
+        return None, "JSON lacks 'installed' or 'web' OAuth client section."
+    return data, "ok"
+
+
+def run_gmail_oauth_now(creds_path: str, token_path: str) -> tuple[bool, str]:
+    """Run the one-time browser OAuth flow immediately, saving token.json."""
+    try:
+        from modules.email_reader import GmailAPIReader
+    except Exception as e:
+        return False, f"Could not load email module: {e}"
+    try:
+        reader = GmailAPIReader(
+            credentials_path=(BASE_DIR / creds_path) if not os.path.isabs(creds_path) else Path(creds_path),
+            token_path=(BASE_DIR / token_path) if not os.path.isabs(token_path) else Path(token_path),
+        )
+        ok = reader.authenticate()
+        return (True, "Authenticated — token.json saved.") if ok else (False, "Authentication did not complete.")
+    except Exception as e:
+        return False, str(e)[:300]
+
+
 def run_check() -> int:
     """Validate existing configuration; exit 0 if runnable, 1 otherwise."""
     console.print(Panel("JARVIS configuration check", style="cyan"))
@@ -281,13 +348,66 @@ def main() -> None:
     imap_folder = existing.get("IMAP_FOLDER", "INBOX")
 
     if choice == "1":
-        console.print("[dim]Google Cloud Console → APIs & Services → enable Gmail API → OAuth client (Desktop) → download JSON → save as credentials.json in this folder.[/dim]")
-        creds_path = ask_text("OAuth client file (credentials.json path)", default=creds_path)
+        console.print("[dim]The wizard builds credentials.json for you — just copy 2 strings from[/dim]")
+        console.print("[dim]Google Cloud Console → enable Gmail API → OAuth client (Desktop app).[/dim]")
+        creds_path = ask_text("Where to save credentials.json", default=creds_path)
         token_path = ask_text("OAuth token file", default=token_path)
+
+        have_valid = False
         ok_c, msg_c = check_credentials_json(creds_path)
-        console.print(f"[green]✔ {msg_c}[/green]" if ok_c else f"[yellow]⚠ {msg_c}[/yellow]")
-        if not ok_c:
-            console.print("[yellow]You can finish setup now and drop credentials.json in later — Gmail runs will fail until then.[/yellow]")
+        if ok_c:
+            console.print(f"[green]✔ Found valid credentials file: {msg_c}[/green]")
+            if Confirm.ask("Keep it and skip entering details?", default=True):
+                have_valid = True
+
+        if not have_valid:
+            console.print("How do you want to provide the OAuth client?")
+            console.print("  [bold]1[/bold]  Paste the downloaded JSON content (easiest if you have it)")
+            console.print("  [bold]2[/bold]  Type Client ID + Client Secret (wizard builds the file)")
+            console.print("  [bold]3[/bold]  Skip for now (add credentials.json later)")
+            how = Prompt.ask("Choose", choices=["1", "2", "3"], default="1")
+            if how == "1":
+                while True:
+                    try:
+                        data, msg = read_pasted_json()
+                    except KeyboardInterrupt:
+                        raise
+                    if data is None:
+                        console.print(f"[red]{msg}[/red]")
+                        if Confirm.ask("Try pasting again?", default=True):
+                            continue
+                        console.print("[yellow]Skipped — Gmail runs will fail until credentials.json exists.[/yellow]")
+                        break
+                    p = write_credentials_file(creds_path, data)
+                    console.print(f"[green]✔ Saved OAuth client to {p}[/green]")
+                    break
+            elif how == "2":
+                while True:
+                    cid = ask_text("OAuth Client ID (ends with .apps.googleusercontent.com)", default="")
+                    if not cid:
+                        console.print("[red]Client ID is required.[/red]")
+                        continue
+                    if not cid.strip().endswith(".apps.googleusercontent.com"):
+                        console.print("[yellow]That doesn't look like a Google Client ID (should end with .apps.googleusercontent.com).[/yellow]")
+                        if not Confirm.ask("Use it anyway?", default=False):
+                            continue
+                    break
+                csec = ask_secret("OAuth Client Secret")
+                while not csec or is_placeholder(csec):
+                    console.print("[red]Client Secret is required (placeholder not accepted).[/red]")
+                    csec = ask_secret("OAuth Client Secret")
+                pid = ask_text("Google Cloud Project ID", default="", allow_empty=True)
+                p = write_credentials_file(creds_path, build_oauth_client_json(cid, csec, pid))
+                console.print(f"[green]✔ Generated {p} from your Client ID + Secret.[/green]")
+            else:
+                console.print("[yellow]Skipped — drop credentials.json in later; Gmail runs will fail until then.[/yellow]")
+
+        ok_c, msg_c = check_credentials_json(creds_path)
+        console.print(f"[green]✔ {msg_c}[/green]" if ok_c else f"[yellow]⚠ {msg_c} — Gmail runs will fail until fixed.[/yellow]")
+        if ok_c and Confirm.ask("Log in with Google now (opens browser, saves token.json)?", default=False):
+            console.print("[dim]Opening browser for one-time Google login…[/dim]")
+            ok_a, msg_a = run_gmail_oauth_now(creds_path, token_path)
+            console.print(f"[green]✔ {msg_a}[/green]" if ok_a else f"[yellow]⚠ {msg_a}[/yellow]")
         # Still collect IMAP as optional fallback?
         if Confirm.ask("Also configure IMAP App Password as fallback?", default=False):
             choice = "12"  # both
