@@ -484,7 +484,7 @@ class EmailReader(BaseModule):
             print_error("Failed to initialize requested IMAP backend.")
             return False
 
-        # AUTO fallback resolution:
+        # AUTO backend resolution (no silent fake data):
         # 1. Try Gmail API if credentials or token exist
         if Config.has_gmail_credentials():
             print_status("Found Gmail OAuth credentials. Attempting Gmail API connection...")
@@ -493,7 +493,7 @@ class EmailReader(BaseModule):
                 self.is_initialized = True
                 print_success("Connected to Gmail API successfully.")
                 return True
-            print_warning("Gmail API authentication failed. Falling back to IMAP...")
+            print_warning("Gmail API authentication failed. Trying IMAP next (if configured)...")
 
         # 2. Try IMAP if username and app password exist
         if Config.has_imap_credentials():
@@ -505,12 +505,16 @@ class EmailReader(BaseModule):
                 return True
             print_warning("IMAP connection failed.")
 
-        # 3. Informative notice and fallback to mock if requested or no credentials configured
-        print_warning("No active Gmail API (credentials.json) or IMAP (GMAIL_USER/GMAIL_APP_PASSWORD) credentials detected.")
-        print_status("Defaulting to simulated Mock Email Reader for demonstration...")
-        self.active_backend = "mock"
-        self.is_initialized = True
-        return True
+        # 3. No credentials -> hard failure (never silently use mock/fake emails).
+        # Mock mode is ONLY allowed via explicit `--mock` / backend="mock" for testing.
+        print_error("No email credentials configured.")
+        print_status("Setup required — run:  python setup.py")
+        print_status("  • Option A (recommended): Gmail OAuth — place credentials.json in project root")
+        print_status("  • Option B (fastest): set GMAIL_USER + GMAIL_APP_PASSWORD in .env (IMAP)")
+        print_status("  • Option C (test only): re-run with explicit --mock flag for simulated emails")
+        self.active_backend = None
+        self.is_initialized = False
+        return False
 
     def execute(self, query: str = "is:unread", limit: int = 5) -> List[EmailMessage]:
         """Fetch unread emails using active backend."""

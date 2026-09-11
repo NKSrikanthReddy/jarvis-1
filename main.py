@@ -45,45 +45,78 @@ class JarvisAssistant:
         self.email_reader = EmailReader(backend=self.backend)
         self.summarizer = EmailSummarizer(model_name=model_name)
         self.voice_module = VoiceModule() if self.enable_voice else None
+        self.last_error: Optional[str] = None  # set when run_cycle fails (vs empty inbox)
 
     def initialize(self) -> bool:
-        """Initialize all sub-modules."""
+        """Initialize all sub-modules.
+
+        Returns True only if the email backend is ready. The Gemini
+        summarizer is initialized lazily per-cycle so a missing API key
+        produces a clear per-run error (never a placeholder briefing).
+        """
         if not self.quiet:
             print_banner()
             print_status(f"Initializing JARVIS Core Systems for {Config.USER_NAME}...")
 
-        # Initialize email reader
+        # Initialize email reader (hard requirement — no silent mock fallback)
         reader_ok = self.email_reader.initialize()
-        
-        # Initialize summarizer
-        self.summarizer.initialize()
+        if not reader_ok:
+            print_error("Email backend initialization failed. Run `python setup.py` to configure credentials.")
+            return False
+
+        # Pre-flight check for Gemini key so failures are explicit, not fake output.
+        if not Config.validate_llm() and not self.summarizer.api_key:
+            print_warning("GEMINI_API_KEY is not configured. Briefings will fail until you run `python setup.py`.")
+            print_status("Tip: Get a key at https://aistudio.google.com/ — mock mode still needs a real key.")
+        else:
+            self.summarizer.initialize()
 
         # Initialize voice if enabled
         if self.voice_module:
             self.voice_module.initialize()
 
-        return reader_ok
+        return True
 
     def run_cycle(self, limit: int = Config.DEFAULT_EMAIL_LIMIT, query: str = "is:unread") -> Optional[str]:
-        """Execute a single email intelligence cycle."""
+        """Execute a single email intelligence cycle.
+
+        Returns the briefing text on success, None on any failure.
+        Failures print a real error — never a placeholder/fake briefing.
+        Check `self.last_error` to distinguish errors from an empty inbox.
+        """
+        self.last_error = None
         if not self.quiet:
             print_status(f"Scanning unread emails [Limit: {limit}, Query: '{query}', Backend: {self.email_reader.active_backend}]...")
 
         try:
             # 1. Fetch unread emails
             emails = self.email_reader.execute(query=query, limit=limit)
-            
+
             if not emails:
+                # Distinguish "no mail" from "backend broken": execute() returns []
+                # for both, but initialize() already gates misconfiguration.
                 if not self.quiet:
-                    print_status(f"All clear, {Config.USER_NAME}. No unread messages in queue.")
+                    if not self.email_reader.is_initialized or not self.email_reader.active_backend:
+                        self.last_error = "Email backend is not initialized. Run `python setup.py`."
+                        print_error(self.last_error)
+                    else:
+                        print_status(f"All clear, {Config.USER_NAME}. No unread messages in queue.")
+                else:
+                    if not self.email_reader.is_initialized or not self.email_reader.active_backend:
+                        self.last_error = "Email backend is not initialized."
                 return None
 
             if not self.quiet:
                 print_email_table([e.model_dump() for e in emails])
                 print_status("Engaging Gemini 2.5 Flash intelligence engine for executive briefing...")
 
-            # 2. Generate JARVIS summary briefing
-            briefing = self.summarizer.execute(emails)
+            # 2. Generate JARVIS summary briefing (raises RuntimeError on missing key/API failure)
+            try:
+                briefing = self.summarizer.execute(emails)
+            except RuntimeError as e:
+                self.last_error = str(e)
+                print_error(self.last_error)
+                return None
 
             # 3. Render Output
             if self.json_output:
@@ -117,7 +150,8 @@ class JarvisAssistant:
             return briefing.raw_response
 
         except Exception as e:
-            print_error(f"Error occurred during briefing cycle: {e}")
+            self.last_error = f"Error occurred during briefing cycle: {e}"
+            print_error(self.last_error)
             return None
 
     def run_loop(self, interval_seconds: int, limit: int = Config.DEFAULT_EMAIL_LIMIT, query: str = "is:unread") -> None:
@@ -265,13 +299,17 @@ def main():
     )
 
     if not assistant.initialize():
-        print_error("Failed to initialize JARVIS assistant.")
+        print_error("Failed to initialize JARVIS assistant. Run `python setup.py` first.")
         sys.exit(1)
 
     if interval:
         assistant.run_loop(interval_seconds=interval, limit=args.limit, query=args.query)
     else:
-        assistant.run_cycle(limit=args.limit, query=args.query)
+        result = assistant.run_cycle(limit=args.limit, query=args.query)
+        if result is None and assistant.last_error:
+            # Real failure (bad creds/key/API) — exit non-zero so scripts detect it.
+            # Empty inbox keeps exit 0.
+            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -6,17 +6,40 @@
 
 ---
 
+## 🧰 Tech Stack
+
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| Language | Python 3.10+ | Core runtime |
+| LLM | Google Gemini 2.5 Flash (`google-genai` ≥ 2.0, `google-generativeai` ≥ 0.8 fallback) | Executive email briefings with JARVIS persona |
+| Gmail API | `google-api-python-client` ≥ 2.120, `google-auth-oauthlib` ≥ 1.2, `google-auth-httplib2` ≥ 0.2 | OAuth2 unread-mail fetch + mark-as-read |
+| IMAP fallback | stdlib `imaplib` / `email` | SSL mailbox read via App Password / custom servers |
+| Config | `python-dotenv` ≥ 1.0.1 | `.env` loading via `config.py` |
+| Data models | `pydantic` ≥ 2.7 | `EmailMessage`, `JarvisBriefing`, attachments, actions |
+| HTML parsing | `beautifulsoup4` ≥ 4.12.3 | HTML → text, script/style stripping |
+| Terminal UI | `rich` ≥ 13.7.1 | Stark HUD: banner, tables, briefing panels, setup wizard |
+| TTS (optional) | macOS `say` / `pyttsx3` | Spoken briefings (`--voice`) |
+| Testing | `pytest` ≥ 8.1.0 | 18-test suite (readers, summarizer, CLI, cleaners) |
+| Install | `install.sh` (bash + zsh) + `setup.py` TUI | venv bootstrap, dep install, interactive `.env` setup |
+
+> Design rule: **no placeholder output.** Missing creds/API key is a hard, actionable error — never fake emails or a fake briefing. Mock data is explicit-only (`--mock`).
+
+---
+
 ## ⚡ Highlights
 
 - **Modular Architecture**: Clean, decoupled architecture under `modules/` for effortless integration of future agents (Voice TTS, Google Calendar, Web Scrapers, Slack/Discord bots).
-- **Dual Email Backends with Auto-Fallback**:
+- **Dual Email Backends (explicit, no silent fakes)**:
   - **Gmail API (OAuth2)**: Official Google API client with automatic token refreshing (`credentials.json` ➔ `token.json`).
-  - **IMAP Fallback**: SSL IMAP reader (`imaplib`) for quick Gmail App Password or custom email servers.
-  - **Mock Mode**: Built-in realistic synthetic email simulation for testing without credentials.
+  - **IMAP**: SSL IMAP reader (`imaplib`) for quick Gmail App Password or custom email servers.
+  - **Mock Mode (explicit only)**: `--mock` / `--backend mock` returns synthetic mail for testing. `auto` mode **never** uses mock — it errors and points to `python setup.py`.
 - **Gemini 2.5 Flash LLM Pipeline**:
-  - Powered by the modern `google-genai` SDK.
+  - Powered by the modern `google-genai` SDK (with `google-generativeai` fallback).
   - Tony Stark / JARVIS persona: crisp, razor-sharp, zero-fluff, surfacing critical action items, deadlines, and high-priority senders.
+  - Missing/invalid key or API failure = clear `RuntimeError`, never an "offline placeholder" briefing.
 - **Tactical Terminal HUD**: Built with `rich` for Stark Industries console styling, email queue tables, executive panels, and JSON export.
+- **TUI Setup Wizard (`setup.py`)**: Rich-powered interactive setup — collects Gemini key, Gmail/IMAP creds, and defaults, validates them (optional live API + IMAP login tests), and writes a chmod-600 `.env`.
+- **One-shot installer (`install.sh`)**: bash/zsh-compatible — creates `.venv`, installs deps, launches the setup wizard, and drops a `./jarvis` launcher.
 - **Continuous Monitoring**: Run on-demand or in a background polling loop (`--interval 300` or `--watch`).
 - **Voice Synthesis Support**: Built-in voice narration via native macOS `say` or `pyttsx3`.
 
@@ -26,6 +49,9 @@
 
 ```
 jarvis/
+├── install.sh                  # bash/zsh installer (venv + deps + setup wizard + ./jarvis launcher)
+├── setup.py                    # Rich TUI setup wizard (API keys + mail creds → .env) + --check
+├── jarvis                      # Generated launcher (created by install.sh; git-ignored)
 ├── .env.example              # Template for API keys and configuration
 ├── .gitignore                # Security filters (ignores tokens, keys, venv)
 ├── requirements.txt          # Python dependencies
@@ -44,67 +70,98 @@ jarvis/
 │   ├── models.py             # Pydantic data models (EmailMessage, JarvisBriefing, etc.)
 │   ├── text_cleaner.py       # HTML stripper, MIME decoder, date parser, text sanitizer
 │   └── logger.py             # Rich console themes, ASCII banners, tables, and HUD panels
-└── tests/                    # Pytest Suite
+└── tests/                    # Pytest Suite (18 tests)
     ├── __init__.py
     ├── test_email_reader.py  # Tests for IMAP/MIME parsing, Mock reader, backends
-    ├── test_summarizer.py    # Tests for prompt construction & offline fallback
+    ├── test_summarizer.py    # Tests for prompt construction + no-placeholder guarantees
     ├── test_text_cleaner.py  # Tests for MIME decoding & HTML sanitization
-    └── test_cli.py           # CLI argument parsing and execution tests
+    └── test_cli.py           # CLI parsing, mock success/failure, auto-without-creds tests
 ```
 
 ---
 
-## 🚀 Quickstart
+## 🛠️ Prerequisites
 
-### 1. Clone or Open the Repository
+- Python **3.10+** (`python3 --version`)
+- A Gemini API key → https://aistudio.google.com/
+- For real mail: **either** `credentials.json` (Gmail OAuth) **or** Gmail address + App Password (IMAP)
+- Works in **bash or zsh**, macOS or Linux
+
+---
+
+## 🚀 Quickstart (recommended: installer + TUI setup)
+
 ```bash
-cd jarvis
+git clone https://github.com/NKSrikanthReddy/jarvis-1.git
+cd jarvis-1
+
+# Full install: venv + deps + interactive TUI setup (API + mail inputs → .env) + ./jarvis launcher
+./install.sh
+# (also works as: bash install.sh  |  zsh install.sh)
+
+# Validate anytime (no prompts)
+./.venv/bin/python setup.py --check
+
+# Test end-to-end with fake mail but your REAL Gemini key
+./jarvis --mock -n 2
+
+# Real run (auto-detects Gmail OAuth → IMAP; errors clearly if unconfigured)
+./jarvis
 ```
 
-### 2. Set Up Virtual Environment & Dependencies
+Installer flags:
+
+| Flag | Effect |
+| :--- | :--- |
+| `./install.sh` | Full install + TUI wizard |
+| `./install.sh --skip-setup` | Deps only, skip wizard (run `./.venv/bin/python setup.py` later) |
+| `./install.sh --check` | Deps + validate config, no prompts |
+| `./install.sh --reinstall` | Wipe `.venv` and reinstall |
+
+Manual alternative (same result, no script):
+
 ```bash
-# Create virtual environment
 python3 -m venv .venv
-
-# Activate virtual environment
 source .venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
+python setup.py
+python main.py --mock -n 2
 ```
 
-### 3. Configure Environment Variables
-Copy the template file to `.env`:
-```bash
-cp .env.example .env
-```
-Edit `.env` to configure your API keys:
-```env
-# User name used in briefings
-JARVIS_USER_NAME=Sir
+### TUI setup wizard (`setup.py`)
 
-# Gemini API Key (from https://aistudio.google.com/)
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-```
+All API/mail inputs happen **inside the TUI** — you never hand-edit `.env` by hand:
+
+1. **Identity** — how JARVIS addresses you (`JARVIS_USER_NAME`)
+2. **Gemini key** — hidden password prompt, placeholder rejected, optional live API test, model choice
+3. **Email backend** — `1` Gmail OAuth (`credentials.json` validated) / `2` IMAP App Password (email-validated, optional live login test) / `3` mock-only
+4. **Defaults** — email limit, watch interval, voice on/off + rate
+
+Writes `.env` (chmod 600, git-ignored) and prints next steps.
+
+---
+
+## 🚀 Manual env reference (what the wizard writes)
 
 ---
 
 ## 🔑 Email Authentication Setup
 
-JARVIS automatically detects which email backend to use in the following order:
+> Preferred path: run `python setup.py` — it prompts for everything below with validation.
+> `auto` mode tries Gmail OAuth → IMAP, and **fails with setup instructions if neither is configured** (it never shows fake mock mail).
 
 ```
 [Auto Backend Resolution]
        │
        ▼
  1. credentials.json / token.json found? ───► YES ───► [Gmail API (OAuth 2.0)]
-       │ (No / Failed)
+       │ (No / Failed → try IMAP)
        ▼
  2. GMAIL_USER & GMAIL_APP_PASSWORD set? ──► YES ───► [IMAP4_SSL (imap.gmail.com)]
        │ (No / Failed)
        ▼
- 3. No credentials configured? ─────────────► YES ───► [Mock Simulation Mode]
+ 3. No credentials configured? ─────────────► HARD ERROR (run `python setup.py`)
+    Mock mail ONLY with explicit `--mock` / `--backend mock`
 ```
 
 ### Option A: Gmail API with OAuth 2.0 (Recommended)
@@ -134,19 +191,22 @@ IMAP_PORT=993
 
 ---
 
-### Option C: Mock Mode (Instant Test without Credentials)
-You can run JARVIS immediately using simulated emails:
+### Option C: Mock Mode (explicit test only — needs a real Gemini key)
+Simulated Stark mail for pipeline testing. Mock never triggers implicitly:
 ```bash
-python main.py --mock
+./jarvis --mock
+# or: python main.py --mock -n 10
 ```
+Note: `--mock` still calls the real Gemini API, so `GEMINI_API_KEY` must be set (via `setup.py`). Without it you get a clear error, not a placeholder briefing.
 
 ---
 
-## 💻 CLI Usage & Commands
+## 💻 CLI Usage & Commands (all work via `./jarvis` too)
 
 ### Basic Run (Summarize latest 5 unread emails)
 ```bash
-python main.py
+./jarvis
+# or: python main.py
 ```
 
 ### Summarize latest 10 emails
@@ -241,12 +301,13 @@ class WebScraperModule(BaseModule):
 
 ## 🧪 Running Automated Tests
 
-Run the complete test suite with `pytest`:
+Run the complete test suite with `pytest` (18 tests):
 ```bash
-pytest -v
+./.venv/bin/python -m pytest -v
+# or: pytest -v   (inside activated venv)
 ```
 
-All unit tests covering MIME parsing, HTML sanitization, mock readers, summarizer prompt logic, and CLI commands will execute.
+Covers MIME parsing, HTML sanitization, mock readers, summarizer prompt logic + **no-placeholder guarantees** (missing key / API failure must raise, auto-without-creds must fail), and CLI commands.
 
 ---
 
