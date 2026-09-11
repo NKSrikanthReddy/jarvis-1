@@ -174,6 +174,12 @@ Writes `.env` (chmod 600, git-ignored) and prints next steps.
 7. Either paste the Client ID + Secret into the setup wizard, or download the JSON file, rename it to `credentials.json`, and place it in the `jarvis/` root directory.
 8. On the first run, JARVIS will open a browser window for a one-time Google login and save `token.json`.
 
+> **Fix `Error 400: redirect_uri_mismatch`:** the app logs in via `http://localhost:8080/`.
+> It happens when your OAuth client is the **Web application** type instead of **Desktop app**.
+> Either recreate the client as **Desktop app** (no extra setup), or keep the Web client and add
+> `http://localhost:8080/` under APIs & Services > Credentials > your client > **Authorized redirect URIs**.
+> (Also add your Gmail as a **Test User** on the consent screen, or Google blocks the login.)
+
 ---
 
 ### Option B: Gmail IMAP with App Password (Optional Alternative)

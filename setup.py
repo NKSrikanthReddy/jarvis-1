@@ -160,6 +160,33 @@ def check_credentials_json(path_str: str) -> tuple[bool, str]:
     return False, "JSON lacks 'installed' or 'web' OAuth client section."
 
 
+def oauth_client_type(path_str: str) -> str | None:
+    """Return 'installed' (Desktop app) or 'web' (Web application), else None."""
+    p = (BASE_DIR / path_str) if not os.path.isabs(path_str) else Path(path_str)
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if "installed" in data:
+        return "installed"
+    if "web" in data:
+        return "web"
+    return None
+
+
+def print_oauth_type_warning(path_str: str) -> None:
+    """Warn Web-application clients about the redirect URI they must register."""
+    if oauth_client_type(path_str) == "web":
+        console.print(Panel(
+            "Your credentials.json is a [bold]Web application[/bold] client.\n"
+            "Before logging in, add this under APIs & Services > Credentials > your client\n"
+            "> [bold]Authorized redirect URIs[/bold]:\n"
+            "   [bold]http://localhost:8080/[/bold]\n"
+            "Or skip this by recreating the client as [bold]Desktop app[/bold] type instead.",
+            title="[yellow]⚠ One extra step for Web-type clients[/yellow]", border_style="yellow",
+        ))
+
+
 def build_oauth_client_json(client_id: str, client_secret: str, project_id: str = "") -> dict:
     """Build a Desktop-app credentials.json dict from raw OAuth details."""
     return {
@@ -170,7 +197,7 @@ def build_oauth_client_json(client_id: str, client_secret: str, project_id: str 
             "token_uri": "https://oauth2.googleapis.com/token",
             "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
             "client_secret": client_secret.strip(),
-            "redirect_uris": ["http://localhost"],
+            "redirect_uris": ["http://localhost:8080/"],
         }
     }
 
@@ -263,6 +290,8 @@ def run_check() -> int:
         imap_user if imap_ok else "not configured (or placeholder)")
 
     console.print(table)
+    if ok_c and oauth_client_type(creds_path) == "web":
+        print_oauth_type_warning(creds_path)
     if ok_c or imap_ok:
         console.print("[green]Email backend: configured.[/green]")
     else:
@@ -416,6 +445,8 @@ def main() -> None:
 
         ok_c, msg_c = check_credentials_json(creds_path)
         console.print(f"[green]✔ {msg_c}[/green]" if ok_c else f"[yellow]⚠ {msg_c} — Gmail runs will fail until fixed.[/yellow]")
+        if ok_c:
+            print_oauth_type_warning(creds_path)
         if ok_c and Confirm.ask("Log in with Google now (opens browser, saves token.json)?", default=False):
             console.print("[dim]Opening browser for one-time Google login…[/dim]")
             ok_a, msg_a = run_gmail_oauth_now(creds_path, token_path)

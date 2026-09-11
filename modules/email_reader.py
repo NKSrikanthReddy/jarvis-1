@@ -19,6 +19,13 @@ from utils.logger import print_status, print_warning, print_error, print_success
 class GmailAPIReader:
     """Gmail API reader using OAuth2 (credentials.json / token.json)."""
 
+    # Fixed loopback port for the one-time browser login. Fixed (not random)
+    # so the redirect URI is predictable: http://localhost:8080/
+    #  - "Desktop app" clients accept it with no extra setup (recommended).
+    #  - "Web application" clients must list it under Authorized redirect URIs.
+    OAUTH_LOCAL_PORT = 8080
+    OAUTH_REDIRECT_URI = "http://localhost:8080/"
+
     def __init__(self, credentials_path: Path = Config.GMAIL_CREDENTIALS_PATH, token_path: Path = Config.GMAIL_TOKEN_PATH):
         self.credentials_path = credentials_path
         self.token_path = token_path
@@ -59,12 +66,19 @@ class GmailAPIReader:
                     return False
                 try:
                     print_status(f"Authenticating Gmail via OAuth client secret ({self.credentials_path.name})...")
+                    print_status(f"If Google shows the login in your browser, approve it, then return here. (Redirect: {self.OAUTH_REDIRECT_URI})")
                     flow = InstalledAppFlow.from_client_secrets_file(
                         str(self.credentials_path), Config.GMAIL_SCOPES
                     )
-                    creds = flow.run_local_server(port=0)
+                    creds = flow.run_local_server(port=self.OAUTH_LOCAL_PORT)
                 except Exception as e:
                     print_error(f"OAuth authentication flow failed: {e}")
+                    print_status(
+                        "If Google showed 'Error 400: redirect_uri_mismatch', your OAuth client is "
+                        f"a 'Web application' type: add {self.OAUTH_REDIRECT_URI} under APIs & Services > "
+                        "Credentials > your client > Authorized redirect URIs — or recreate the client "
+                        "as 'Desktop app' (needs no redirect setup) and re-run setup."
+                    )
                     return False
 
             # Save the credentials for the next run
