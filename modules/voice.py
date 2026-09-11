@@ -17,10 +17,11 @@ class VoiceModule(BaseModule):
     or pyttsx3 fallback.
     """
 
-    def __init__(self, voice_name: Optional[str] = "Daniel", rate: int = Config.VOICE_RATE):
+    def __init__(self, voice_name: Optional[str] = "Daniel", rate: Optional[int] = None):
         super().__init__(name="VoiceModule", description="Spoken voice synthesizer for JARVIS announcements")
         self.voice_name = voice_name
-        self.rate = rate
+        # Resolved at runtime so Config.reload() / .env edits take effect.
+        self.rate = Config.VOICE_RATE if rate is None else rate
         self.engine_type = None
 
     def initialize(self) -> bool:

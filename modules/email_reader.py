@@ -26,9 +26,10 @@ class GmailAPIReader:
     OAUTH_LOCAL_PORT = 8080
     OAUTH_REDIRECT_URI = "http://localhost:8080/"
 
-    def __init__(self, credentials_path: Path = Config.GMAIL_CREDENTIALS_PATH, token_path: Path = Config.GMAIL_TOKEN_PATH):
-        self.credentials_path = credentials_path
-        self.token_path = token_path
+    def __init__(self, credentials_path: Optional[Path] = None, token_path: Optional[Path] = None):
+        # Resolved at runtime so Config.reload() / .env edits take effect.
+        self.credentials_path = Path(credentials_path) if credentials_path else Config.GMAIL_CREDENTIALS_PATH
+        self.token_path = Path(token_path) if token_path else Config.GMAIL_TOKEN_PATH
         self.service = None
 
     def authenticate(self) -> bool:
@@ -219,17 +220,19 @@ class IMAPEmailReader:
 
     def __init__(
         self,
-        username: Optional[str] = Config.GMAIL_USER,
-        password: Optional[str] = Config.GMAIL_APP_PASSWORD,
-        server: str = Config.IMAP_SERVER,
-        port: int = Config.IMAP_PORT,
-        folder: str = Config.IMAP_FOLDER,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        server: Optional[str] = None,
+        port: Optional[int] = None,
+        folder: Optional[str] = None,
     ):
-        self.username = username
-        self.password = password
-        self.server = server
-        self.port = port
-        self.folder = folder
+        # Resolved at runtime so Config.reload() / .env edits take effect.
+        # Explicit args still win over config.
+        self.username = username if username is not None else Config.GMAIL_USER
+        self.password = password if password is not None else Config.GMAIL_APP_PASSWORD
+        self.server = server or Config.IMAP_SERVER
+        self.port = port or Config.IMAP_PORT
+        self.folder = folder or Config.IMAP_FOLDER
         self.client: Optional[imaplib.IMAP4_SSL] = None
 
     def authenticate(self) -> bool:

@@ -30,7 +30,7 @@ class JarvisAssistant:
     def __init__(
         self,
         backend: str = "auto",
-        model_name: str = Config.GEMINI_MODEL,
+        model_name: Optional[str] = None,
         enable_voice: bool = False,
         mark_read: bool = False,
         quiet: bool = False,
@@ -40,10 +40,13 @@ class JarvisAssistant:
         self.mark_read = mark_read
         self.json_output = json_output
         self.quiet = quiet or json_output
+        # Resolved at runtime (not import time) so Config.reload() / .env
+        # edits always take effect. Explicit args still win over config.
+        self.model_name = model_name or Config.GEMINI_MODEL
         self.enable_voice = enable_voice or Config.ENABLE_VOICE
-        
+
         self.email_reader = EmailReader(backend=self.backend)
-        self.summarizer = EmailSummarizer(model_name=model_name)
+        self.summarizer = EmailSummarizer(model_name=self.model_name)
         self.voice_module = VoiceModule() if self.enable_voice else None
         self.last_error: Optional[str] = None  # set when run_cycle fails (vs empty inbox)
 
@@ -77,14 +80,18 @@ class JarvisAssistant:
 
         return True
 
-    def run_cycle(self, limit: int = Config.DEFAULT_EMAIL_LIMIT, query: str = "is:unread") -> Optional[str]:
+    def run_cycle(self, limit: Optional[int] = None, query: str = "is:unread") -> Optional[str]:
         """Execute a single email intelligence cycle.
 
         Returns the briefing text on success, None on any failure.
         Failures print a real error — never a placeholder/fake briefing.
         Check `self.last_error` to distinguish errors from an empty inbox.
+        `limit=None` resolves `Config.DEFAULT_EMAIL_LIMIT` at call time, so
+        `.env`/config edits always apply.
         """
         self.last_error = None
+        if limit is None:
+            limit = Config.DEFAULT_EMAIL_LIMIT
         if not self.quiet:
             print_status(f"Scanning unread emails [Limit: {limit}, Query: '{query}', Backend: {self.email_reader.active_backend}]...")
 
@@ -154,8 +161,10 @@ class JarvisAssistant:
             print_error(self.last_error)
             return None
 
-    def run_loop(self, interval_seconds: int, limit: int = Config.DEFAULT_EMAIL_LIMIT, query: str = "is:unread") -> None:
+    def run_loop(self, interval_seconds: int, limit: Optional[int] = None, query: str = "is:unread") -> None:
         """Run continuous monitoring loop at specified interval."""
+        if limit is None:
+            limit = Config.DEFAULT_EMAIL_LIMIT
         print_status(f"JARVIS continuous monitoring active. Polling every {interval_seconds}s (Press Ctrl+C to stop)...")
         
         cycle_count = 0

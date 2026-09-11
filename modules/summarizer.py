@@ -38,9 +38,10 @@ Format Requirements for your briefing:
 class EmailSummarizer(BaseModule):
     """Summarization pipeline powered by Google Gemini (gemini-2.5-flash)."""
 
-    def __init__(self, model_name: str = Config.GEMINI_MODEL, api_key: Optional[str] = Config.GEMINI_API_KEY):
+    def __init__(self, model_name: Optional[str] = None, api_key: Optional[str] = None):
         super().__init__(name="EmailSummarizer", description="Generates executive email briefings using Gemini 2.5 Flash")
-        self.model_name = model_name
+        # Resolved at runtime so Config.reload() / .env edits take effect.
+        self.model_name = model_name or Config.GEMINI_MODEL
         self.api_key = api_key or Config.GEMINI_API_KEY
         self.client = None
         self._sdk_type = None  # 'genai' or 'generativeai'

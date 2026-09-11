@@ -143,6 +143,11 @@ Writes `.env` (chmod 600, git-ignored) and prints next steps.
 
 ## 🚀 Manual env reference (what the wizard writes)
 
+> **Config precedence (highest wins):** CLI flag (`-n 10`) → `.env` / environment (`DEFAULT_EMAIL_LIMIT`)
+> → `config.py` fallback. So to change the max mails, edit `DEFAULT_EMAIL_LIMIT` in `.env`
+> (or re-run `python setup.py` step 4) — editing the fallback in `config.py` alone has no
+> effect while `.env` sets the value. Long-running code can pick up `.env` edits via `Config.reload()`.
+
 ---
 
 ## 🔑 Email Authentication Setup
