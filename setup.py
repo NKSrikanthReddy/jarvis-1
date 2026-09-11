@@ -348,8 +348,20 @@ def main() -> None:
     imap_folder = existing.get("IMAP_FOLDER", "INBOX")
 
     if choice == "1":
-        console.print("[dim]The wizard builds credentials.json for you — just copy 2 strings from[/dim]")
-        console.print("[dim]Google Cloud Console → enable Gmail API → OAuth client (Desktop app).[/dim]")
+        console.print(Panel(
+            "[bold]Get your OAuth client here (one-time, ~2 min):[/bold]\n"
+            "1. Open Google Cloud Console (create/select a project):\n"
+            "   [link=https://console.cloud.google.com/]https://console.cloud.google.com/[/link]\n"
+            "2. Enable the Gmail API:\n"
+            "   [link=https://console.cloud.google.com/apis/library/gmail.googleapis.com]https://console.cloud.google.com/apis/library/gmail.googleapis.com[/link]\n"
+            "3. Set up the OAuth consent screen (type [bold]External[/bold], add your email as a [bold]Test User[/bold]):\n"
+            "   [link=https://console.cloud.google.com/apis/credentials/consent]https://console.cloud.google.com/apis/credentials/consent[/link]\n"
+            "4. Create an OAuth client ID of type [bold]Desktop app[/bold]:\n"
+            "   [link=https://console.cloud.google.com/apis/credentials]https://console.cloud.google.com/apis/credentials[/link]\n"
+            "5. Copy the [bold]Client ID[/bold] + [bold]Client Secret[/bold] (or Download JSON)\n"
+            "   and paste them below — the wizard builds credentials.json for you.",
+            title="Where to get it", border_style="cyan",
+        ))
         creds_path = ask_text("Where to save credentials.json", default=creds_path)
         token_path = ask_text("OAuth token file", default=token_path)
 

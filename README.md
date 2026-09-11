@@ -166,12 +166,11 @@ Writes `.env` (chmod 600, git-ignored) and prints next steps.
 
 ### Option A: Gmail API with OAuth 2.0 (Recommended)
 > Easiest path: pick `1` in `python setup.py` — it builds `credentials.json` for you from pasted JSON or Client ID + Secret, and can log you in on the spot to create `token.json`. Manual steps below are only if you prefer doing it by hand.
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project (e.g. `JARVIS-Assistant`).
-3. Enable the **Gmail API** in **APIs & Services > Library**.
-4. Configure the **OAuth Consent Screen** (User Type: *External*, add your email as a *Test User*).
-5. Go to **APIs & Services > Credentials** > **Create Credentials** > **OAuth client ID**.
-6. Select **Desktop App** as the Application Type.
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create/select a project (e.g. `JARVIS-Assistant`).
+2. Enable the **Gmail API**: [console.cloud.google.com/apis/library/gmail.googleapis.com](https://console.cloud.google.com/apis/library/gmail.googleapis.com).
+3. Configure the **OAuth Consent Screen** ([credentials/consent](https://console.cloud.google.com/apis/credentials/consent)) — User Type: *External*, add your email as a *Test User*.
+4. Create an **OAuth client ID** ([credentials](https://console.cloud.google.com/apis/credentials)) > **Create Credentials** > **OAuth client ID**.
+5. Select **Desktop App** as the Application Type.
 7. Either paste the Client ID + Secret into the setup wizard, or download the JSON file, rename it to `credentials.json`, and place it in the `jarvis/` root directory.
 8. On the first run, JARVIS will open a browser window for a one-time Google login and save `token.json`.
 
