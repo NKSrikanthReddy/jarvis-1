@@ -67,13 +67,15 @@ class Config:
     VOICE_RATE: int = int(os.getenv("VOICE_RATE", "185"))
 
     @classmethod
-    def reload(cls) -> None:
+    def reload(cls, env_file: Optional[Path] = None) -> None:
         """Re-read ``.env`` + environment into every setting.
 
         Picks up ``.env`` edits at runtime (no restart needed). Values not
         present in ``.env``/environment fall back to ``config.py`` defaults.
+        ``env_file`` overrides which dotenv file is read (tests use an empty
+        file for isolation).
         """
-        load_dotenv(BASE_DIR / ".env", override=True)
+        load_dotenv(env_file or BASE_DIR / ".env", override=True)
         cls.USER_NAME = os.getenv("JARVIS_USER_NAME", "Sir")
         cls.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv(
             "GOOGLE_API_KEY"

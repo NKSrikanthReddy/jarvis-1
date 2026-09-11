@@ -1,12 +1,14 @@
 """Tests for CLI argument parsing and orchestrator initialization."""
 
+from config import Config
 from main import build_cli_parser, JarvisAssistant
 
 
 def test_cli_parser_defaults():
     parser = build_cli_parser()
     args = parser.parse_args([])
-    assert args.limit == 5
+    # Wired to config, not hardcoded: survives DEFAULT_EMAIL_LIMIT edits.
+    assert args.limit == Config.DEFAULT_EMAIL_LIMIT
     assert args.interval is None
     assert args.backend == "auto"
     assert args.mock is False
