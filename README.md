@@ -134,7 +134,7 @@ All API/mail inputs happen **inside the TUI** — you never hand-edit `.env` by 
 
 1. **Identity** — how JARVIS addresses you (`JARVIS_USER_NAME`)
 2. **Gemini key** — hidden password prompt, placeholder rejected, optional live API test, model choice
-3. **Email backend** — `1` Gmail OAuth (`credentials.json` validated) / `2` IMAP App Password (email-validated, optional live login test) / `3` mock-only
+3. **Email backend** — `1` Gmail OAuth (default, no app password) / `2` IMAP App Password (optional, only if you pick it) / `3` mock-only
 4. **Defaults** — email limit, watch interval, voice on/off + rate
 
 Writes `.env` (chmod 600, git-ignored) and prints next steps.
@@ -176,8 +176,8 @@ Writes `.env` (chmod 600, git-ignored) and prints next steps.
 
 ---
 
-### Option B: Gmail IMAP with App Password (Fastest Real Setup)
-If you prefer not to create a Google Cloud OAuth project:
+### Option B: Gmail IMAP with App Password (Optional Alternative)
+Only needed if you skip OAuth and pick IMAP in the wizard. If you prefer not to create a Google Cloud OAuth project:
 1. Ensure **2-Step Verification** is enabled on your Google Account: [Google Security Settings](https://myaccount.google.com/security).
 2. Generate an **App Password** at: [Google App Passwords](https://myaccount.google.com/apppasswords).
 3. Set the name to `JARVIS` and copy the generated 16-character password.

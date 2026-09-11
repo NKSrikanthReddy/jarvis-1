@@ -262,10 +262,11 @@ def main() -> None:
 
     # ---- 3. Email backend ----
     console.print("\n[bold yellow]── Step 3/4 · Email backend ──[/bold yellow]")
-    console.print("  [bold]1[/bold]  Gmail OAuth  (recommended — needs credentials.json from Google Cloud Console)")
-    console.print("  [bold]2[/bold]  IMAP App Password  (fastest — needs GMAIL_USER + 16-char App Password)")
+    console.print("  [bold]1[/bold]  Gmail OAuth  (recommended — just a credentials.json file, NO app password needed)")
+    console.print("  [bold]2[/bold]  IMAP App Password  (optional alternative — only pick this if you want it)")
     console.print("  [bold]3[/bold]  Mock only  (testing with fake emails — real runs will refuse without creds)")
-    choice = Prompt.ask("Choose backend", choices=["1", "2", "3"], default="2")
+    console.print("[dim]App Password is ONLY needed for option 2. Default (1) never asks for it.[/dim]")
+    choice = Prompt.ask("Choose backend", choices=["1", "2", "3"], default="1")
 
     creds_path = existing.get("GMAIL_CREDENTIALS_PATH", "credentials.json")
     token_path = existing.get("GMAIL_TOKEN_PATH", "token.json")
