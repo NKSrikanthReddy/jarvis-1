@@ -19,9 +19,17 @@ from utils.logger import print_status, print_warning, print_error, print_success
 class GmailAPIReader:
     """Gmail API reader using OAuth2 (credentials.json / token.json)."""
 
-    def __init__(self, credentials_path: Path = Config.GMAIL_CREDENTIALS_PATH, token_path: Path = Config.GMAIL_TOKEN_PATH):
-        self.credentials_path = credentials_path
-        self.token_path = token_path
+    # Fixed loopback port for the one-time browser login. Fixed (not random)
+    # so the redirect URI is predictable: http://localhost:8080/
+    #  - "Desktop app" clients accept it with no extra setup (recommended).
+    #  - "Web application" clients must list it under Authorized redirect URIs.
+    OAUTH_LOCAL_PORT = 8080
+    OAUTH_REDIRECT_URI = "http://localhost:8080/"
+
+    def __init__(self, credentials_path: Optional[Path] = None, token_path: Optional[Path] = None):
+        # Resolved at runtime so Config.reload() / .env edits take effect.
+        self.credentials_path = Path(credentials_path) if credentials_path else Config.GMAIL_CREDENTIALS_PATH
+        self.token_path = Path(token_path) if token_path else Config.GMAIL_TOKEN_PATH
         self.service = None
 
     def authenticate(self) -> bool:
@@ -59,12 +67,19 @@ class GmailAPIReader:
                     return False
                 try:
                     print_status(f"Authenticating Gmail via OAuth client secret ({self.credentials_path.name})...")
+                    print_status(f"If Google shows the login in your browser, approve it, then return here. (Redirect: {self.OAUTH_REDIRECT_URI})")
                     flow = InstalledAppFlow.from_client_secrets_file(
                         str(self.credentials_path), Config.GMAIL_SCOPES
                     )
-                    creds = flow.run_local_server(port=0)
+                    creds = flow.run_local_server(port=self.OAUTH_LOCAL_PORT)
                 except Exception as e:
                     print_error(f"OAuth authentication flow failed: {e}")
+                    print_status(
+                        "If Google showed 'Error 400: redirect_uri_mismatch', your OAuth client is "
+                        f"a 'Web application' type: add {self.OAUTH_REDIRECT_URI} under APIs & Services > "
+                        "Credentials > your client > Authorized redirect URIs — or recreate the client "
+                        "as 'Desktop app' (needs no redirect setup) and re-run setup."
+                    )
                     return False
 
             # Save the credentials for the next run
@@ -205,17 +220,19 @@ class IMAPEmailReader:
 
     def __init__(
         self,
-        username: Optional[str] = Config.GMAIL_USER,
-        password: Optional[str] = Config.GMAIL_APP_PASSWORD,
-        server: str = Config.IMAP_SERVER,
-        port: int = Config.IMAP_PORT,
-        folder: str = Config.IMAP_FOLDER,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        server: Optional[str] = None,
+        port: Optional[int] = None,
+        folder: Optional[str] = None,
     ):
-        self.username = username
-        self.password = password
-        self.server = server
-        self.port = port
-        self.folder = folder
+        # Resolved at runtime so Config.reload() / .env edits take effect.
+        # Explicit args still win over config.
+        self.username = username if username is not None else Config.GMAIL_USER
+        self.password = password if password is not None else Config.GMAIL_APP_PASSWORD
+        self.server = server or Config.IMAP_SERVER
+        self.port = port or Config.IMAP_PORT
+        self.folder = folder or Config.IMAP_FOLDER
         self.client: Optional[imaplib.IMAP4_SSL] = None
 
     def authenticate(self) -> bool:
@@ -484,7 +501,7 @@ class EmailReader(BaseModule):
             print_error("Failed to initialize requested IMAP backend.")
             return False
 
-        # AUTO fallback resolution:
+        # AUTO backend resolution (no silent fake data):
         # 1. Try Gmail API if credentials or token exist
         if Config.has_gmail_credentials():
             print_status("Found Gmail OAuth credentials. Attempting Gmail API connection...")
@@ -493,7 +510,7 @@ class EmailReader(BaseModule):
                 self.is_initialized = True
                 print_success("Connected to Gmail API successfully.")
                 return True
-            print_warning("Gmail API authentication failed. Falling back to IMAP...")
+            print_warning("Gmail API authentication failed. Trying IMAP next (if configured)...")
 
         # 2. Try IMAP if username and app password exist
         if Config.has_imap_credentials():
@@ -505,12 +522,16 @@ class EmailReader(BaseModule):
                 return True
             print_warning("IMAP connection failed.")
 
-        # 3. Informative notice and fallback to mock if requested or no credentials configured
-        print_warning("No active Gmail API (credentials.json) or IMAP (GMAIL_USER/GMAIL_APP_PASSWORD) credentials detected.")
-        print_status("Defaulting to simulated Mock Email Reader for demonstration...")
-        self.active_backend = "mock"
-        self.is_initialized = True
-        return True
+        # 3. No credentials -> hard failure (never silently use mock/fake emails).
+        # Mock mode is ONLY allowed via explicit `--mock` / backend="mock" for testing.
+        print_error("No email credentials configured.")
+        print_status("Setup required — run:  python setup.py")
+        print_status("  • Option A (recommended): Gmail OAuth — place credentials.json in project root")
+        print_status("  • Option B (fastest): set GMAIL_USER + GMAIL_APP_PASSWORD in .env (IMAP)")
+        print_status("  • Option C (test only): re-run with explicit --mock flag for simulated emails")
+        self.active_backend = None
+        self.is_initialized = False
+        return False
 
     def execute(self, query: str = "is:unread", limit: int = 5) -> List[EmailMessage]:
         """Fetch unread emails using active backend."""

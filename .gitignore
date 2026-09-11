@@ -12,6 +12,9 @@ venv/
 ENV/
 env/
 
+# Generated launcher (created by install.sh)
+jarvis
+
 # Python cache & Bytecode
 __pycache__/
 *.py[cod]

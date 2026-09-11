@@ -13,37 +13,93 @@ load_dotenv(BASE_DIR / ".env")
 
 
 class Config:
-    """Central configuration class."""
-    
+    """Central configuration class.
+
+    Precedence (highest wins):
+      1. Explicit CLI flags (e.g. ``-n 10``)
+      2. ``.env`` file / environment variables (e.g. ``DEFAULT_EMAIL_LIMIT``)
+      3. Fallback defaults below in ``config.py``
+
+    So: to change the max mails, edit ``DEFAULT_EMAIL_LIMIT`` in ``.env``
+    (or re-run ``python setup.py`` step 4) — editing the fallback below
+    only matters when ``.env`` does not set the value. Call
+    ``Config.reload()`` to pick up ``.env`` edits without restarting.
+    """
+
     # User Persona & Addressing
     USER_NAME: str = os.getenv("JARVIS_USER_NAME", "Sir")
-    
+
     # LLM Settings
-    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY") or os.getenv(
+        "GOOGLE_API_KEY"
+    )
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    
+
     # Gmail API OAuth Settings
-    GMAIL_CREDENTIALS_PATH: Path = Path(os.getenv("GMAIL_CREDENTIALS_PATH", BASE_DIR / "credentials.json"))
-    GMAIL_TOKEN_PATH: Path = Path(os.getenv("GMAIL_TOKEN_PATH", BASE_DIR / "token.json"))
+    GMAIL_CREDENTIALS_PATH: Path = Path(
+        os.getenv("GMAIL_CREDENTIALS_PATH", BASE_DIR / "credentials.json")
+    )
+    GMAIL_TOKEN_PATH: Path = Path(
+        os.getenv("GMAIL_TOKEN_PATH", BASE_DIR / "token.json")
+    )
     GMAIL_SCOPES: list[str] = [
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/gmail.modify",
     ]
-    
+
     # IMAP Fallback Settings
     GMAIL_USER: Optional[str] = os.getenv("GMAIL_USER")
     GMAIL_APP_PASSWORD: Optional[str] = os.getenv("GMAIL_APP_PASSWORD")
     IMAP_SERVER: str = os.getenv("IMAP_SERVER", "imap.gmail.com")
     IMAP_PORT: int = int(os.getenv("IMAP_PORT", "993"))
     IMAP_FOLDER: str = os.getenv("IMAP_FOLDER", "INBOX")
-    
+
     # Operational Defaults
-    DEFAULT_EMAIL_LIMIT: int = int(os.getenv("DEFAULT_EMAIL_LIMIT", "5"))
+    DEFAULT_EMAIL_LIMIT: int = int(os.getenv("DEFAULT_EMAIL_LIMIT", "10"))
     CHECK_INTERVAL_SECONDS: int = int(os.getenv("CHECK_INTERVAL_SECONDS", "300"))
-    
+
     # Voice Settings
-    ENABLE_VOICE: bool = os.getenv("ENABLE_VOICE", "false").lower() in ("true", "1", "yes")
+    ENABLE_VOICE: bool = os.getenv("ENABLE_VOICE", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
     VOICE_RATE: int = int(os.getenv("VOICE_RATE", "185"))
+
+    @classmethod
+    def reload(cls, env_file: Optional[Path] = None) -> None:
+        """Re-read ``.env`` + environment into every setting.
+
+        Picks up ``.env`` edits at runtime (no restart needed). Values not
+        present in ``.env``/environment fall back to ``config.py`` defaults.
+        ``env_file`` overrides which dotenv file is read (tests use an empty
+        file for isolation).
+        """
+        load_dotenv(env_file or BASE_DIR / ".env", override=True)
+        cls.USER_NAME = os.getenv("JARVIS_USER_NAME", "Sir")
+        cls.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv(
+            "GOOGLE_API_KEY"
+        )
+        cls.GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        cls.GMAIL_CREDENTIALS_PATH = Path(
+            os.getenv("GMAIL_CREDENTIALS_PATH", BASE_DIR / "credentials.json")
+        )
+        cls.GMAIL_TOKEN_PATH = Path(
+            os.getenv("GMAIL_TOKEN_PATH", BASE_DIR / "token.json")
+        )
+        cls.GMAIL_USER = os.getenv("GMAIL_USER")
+        cls.GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+        cls.IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.gmail.com")
+        cls.IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
+        cls.IMAP_FOLDER = os.getenv("IMAP_FOLDER", "INBOX")
+        cls.DEFAULT_EMAIL_LIMIT = int(os.getenv("DEFAULT_EMAIL_LIMIT", "10"))
+        cls.CHECK_INTERVAL_SECONDS = int(os.getenv("CHECK_INTERVAL_SECONDS", "300"))
+        cls.ENABLE_VOICE = os.getenv("ENABLE_VOICE", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+        cls.VOICE_RATE = int(os.getenv("VOICE_RATE", "185"))
 
     @classmethod
     def validate_llm(cls) -> bool:

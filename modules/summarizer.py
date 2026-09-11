@@ -38,9 +38,10 @@ Format Requirements for your briefing:
 class EmailSummarizer(BaseModule):
     """Summarization pipeline powered by Google Gemini (gemini-2.5-flash)."""
 
-    def __init__(self, model_name: str = Config.GEMINI_MODEL, api_key: Optional[str] = Config.GEMINI_API_KEY):
+    def __init__(self, model_name: Optional[str] = None, api_key: Optional[str] = None):
         super().__init__(name="EmailSummarizer", description="Generates executive email briefings using Gemini 2.5 Flash")
-        self.model_name = model_name
+        # Resolved at runtime so Config.reload() / .env edits take effect.
+        self.model_name = model_name or Config.GEMINI_MODEL
         self.api_key = api_key or Config.GEMINI_API_KEY
         self.client = None
         self._sdk_type = None  # 'genai' or 'generativeai'
@@ -87,7 +88,14 @@ class EmailSummarizer(BaseModule):
             return False
 
     def execute(self, emails: List[EmailMessage]) -> JarvisBriefing:
-        """Process and summarize a list of emails."""
+        """Process and summarize a list of emails.
+
+        Raises:
+            RuntimeError: if the Gemini API key is missing or the API call fails.
+                No fake/placeholder briefing is ever returned — callers must
+                surface the error so misconfiguration is never mistaken for
+                a working briefing.
+        """
         if not emails:
             return JarvisBriefing(
                 executive_summary=f"Inbox is completely clear, {Config.USER_NAME}. No unread messages require your attention at this time.",
@@ -95,21 +103,35 @@ class EmailSummarizer(BaseModule):
                 raw_response=f"Good day, {Config.USER_NAME}. Your inbox is completely clear. All systems operating at peak efficiency.",
             )
 
-        # If LLM client is not initialized, try initializing
+        # LLM client must be initialized — no silent heuristic fallback.
         if not self.is_initialized:
             if not self.initialize():
-                return self._generate_offline_fallback_briefing(emails)
+                raise RuntimeError(
+                    "GEMINI_API_KEY is not configured or Gemini client failed to initialize. "
+                    "Run `python setup.py` to configure your API key. "
+                    "Get a key at https://aistudio.google.com/"
+                )
 
         prompt = self._build_prompt(emails)
 
+        # Let API errors propagate as RuntimeError (no placeholder text).
         try:
             raw_text = self._call_llm(prompt)
-            briefing = self._build_briefing_object(emails, raw_text)
-            return briefing
         except Exception as e:
-            print_error(f"Gemini API call failed: {e}")
-            print_warning("Falling back to local heuristic briefing...")
-            return self._generate_offline_fallback_briefing(emails)
+            raise RuntimeError(
+                f"Gemini API call failed: {e}. "
+                "Check GEMINI_API_KEY / GEMINI_MODEL in .env (run `python setup.py`), "
+                "then retry. No offline placeholder briefing is shown by design."
+            ) from e
+
+        if not raw_text or not raw_text.strip():
+            raise RuntimeError(
+                "Gemini API returned an empty response. Retry, or check your model/quota. "
+                "No placeholder briefing is shown by design."
+            )
+
+        briefing = self._build_briefing_object(emails, raw_text)
+        return briefing
 
     def _build_prompt(self, emails: List[EmailMessage]) -> str:
         """Format emails into a structured prompt for Gemini."""
@@ -180,36 +202,5 @@ EMAIL #{i} [ID: {email_msg.id}]
             executive_summary=f"Processed {len(emails)} unread emails.",
             total_emails_processed=len(emails),
             raw_response=raw_response,
-            timestamp=datetime.now(),
-        )
-
-    def _generate_offline_fallback_briefing(self, emails: List[EmailMessage]) -> JarvisBriefing:
-        """Generate a clean rule-based briefing when GEMINI_API_KEY is not configured or offline."""
-        lines = [
-            f"# 🛡️ JARVIS Executive Summary (Offline Rule-Based Mode)\n",
-            f"Good day, {Config.USER_NAME}. Here is a summary of the **{len(emails)} unread messages** currently in your queue.\n",
-            "> ⚠️ *Note: Running in offline heuristic mode. Set `GEMINI_API_KEY` in `.env` for AI intelligence analysis.*\n\n",
-            "## 📋 Unread Messages Breakdown\n",
-        ]
-
-        for idx, em in enumerate(emails, start=1):
-            lines.append(f"### {idx}. {em.subject}")
-            lines.append(f"- **From**: `{em.sender}`")
-            lines.append(f"- **Date**: {em.date.strftime('%Y-%m-%d %H:%M') if em.date else 'Unknown'}")
-            lines.append(f"- **Preview**: {em.snippet or em.body_text[:200]}...")
-            if em.attachments:
-                att_names = ", ".join(f"`{a.filename}`" for a in em.attachments)
-                lines.append(f"- **Attachments**: {att_names}")
-            lines.append("")
-
-        lines.append("## 💡 Suggested Next Actions")
-        lines.append(f"1. Review the high-priority emails listed above.")
-        lines.append(f"2. Add your Google Gemini API key to `.env` to enable full JARVIS cognitive summaries.")
-
-        raw_md = "\n".join(lines)
-        return JarvisBriefing(
-            executive_summary=f"Processed {len(emails)} unread messages in local fallback mode.",
-            total_emails_processed=len(emails),
-            raw_response=raw_md,
             timestamp=datetime.now(),
         )
